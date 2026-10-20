@@ -259,6 +259,15 @@
         let capturedBlack = [];
         let isGameOver = false;
 
+        let movedFlags = {
+            whiteKing: false,
+            whiteRookA: false,
+            whiteRookH: false,
+            blackKing: false,
+            blackRookA: false,
+            blackRookH: false
+        };
+
         function initBoard() {
             board = INITIAL_BOARD.map(row => [...row]);
             currentTurn = 'white';
@@ -267,6 +276,15 @@
             capturedWhite = [];
             capturedBlack = [];
             isGameOver = false;
+            movedFlags = {
+                whiteKing: false,
+                whiteRookA: false,
+                whiteRookH: false,
+                blackKing: false,
+                blackRookA: false,
+                blackRookH: false
+            };
+            document.getElementById('gameStatus').textContent = 'Partida em andamento';
             updateUI();
             renderBoard();
         }
@@ -358,6 +376,7 @@
         function executeMove(fromR, fromC, toR, toC) {
             const movingPiece = board[fromR][fromC];
             const targetPiece = board[toR][toC];
+            const pieceInfo = PIECES[movingPiece];
 
             if (targetPiece) {
                 const captured = PIECES[targetPiece];
@@ -369,6 +388,33 @@
                     document.getElementById('gameStatus').textContent = `🏆 Vitória das ${currentTurn === 'white' ? 'Brancas' : 'Pretas'}!`;
                 }
             }
+
+            // Movimento de Roque (Castling): Rei move 2 casas lateralmente
+            if (pieceInfo.type === 'king' && Math.abs(toC - fromC) === 2) {
+                if (toC === 6) {
+                    // Roque Menor (Rei em G, Torre de H vai para F)
+                    board[fromR][5] = board[fromR][7];
+                    board[fromR][7] = '';
+                } else if (toC === 2) {
+                    // Roque Maior (Rei em C, Torre de A vai para D)
+                    board[fromR][3] = board[fromR][0];
+                    board[fromR][0] = '';
+                }
+            }
+
+            // Atualiza flags de movimento (para impedir novo roque)
+            if (fromR === 7 && fromC === 4) movedFlags.whiteKing = true;
+            if (fromR === 7 && fromC === 0) movedFlags.whiteRookA = true;
+            if (fromR === 7 && fromC === 7) movedFlags.whiteRookH = true;
+            if (fromR === 0 && fromC === 4) movedFlags.blackKing = true;
+            if (fromR === 0 && fromC === 0) movedFlags.blackRookA = true;
+            if (fromR === 0 && fromC === 7) movedFlags.blackRookH = true;
+
+            // Se uma torre foi capturada em sua posição inicial
+            if (toR === 7 && toC === 0) movedFlags.whiteRookA = true;
+            if (toR === 7 && toC === 7) movedFlags.whiteRookH = true;
+            if (toR === 0 && toC === 0) movedFlags.blackRookA = true;
+            if (toR === 0 && toC === 7) movedFlags.blackRookH = true;
 
             // Promoção simples de peão
             if (movingPiece === 'P' && toR === 0) board[toR][toC] = 'Q';
@@ -448,6 +494,27 @@
             } else if (piece.type === 'king') {
                 const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [-1, 1], [1, -1], [1, 1]];
                 dirs.forEach(([dr, dc]) => addIfValid(r + dr, c + dc));
+
+                // Roque (Castling)
+                if (piece.color === 'white' && !movedFlags.whiteKing && r === 7 && c === 4) {
+                    // Roque menor (lado do rei: G1 / col 6)
+                    if (!movedFlags.whiteRookH && board[7][7] === 'R' && board[7][5] === '' && board[7][6] === '') {
+                        moves.push({ r: 7, c: 6 });
+                    }
+                    // Roque maior (lado da dama: C1 / col 2)
+                    if (!movedFlags.whiteRookA && board[7][0] === 'R' && board[7][1] === '' && board[7][2] === '' && board[7][3] === '') {
+                        moves.push({ r: 7, c: 2 });
+                    }
+                } else if (piece.color === 'black' && !movedFlags.blackKing && r === 0 && c === 4) {
+                    // Roque menor (lado do rei: G8 / col 6)
+                    if (!movedFlags.blackRookH && board[0][7] === 'r' && board[0][5] === '' && board[0][6] === '') {
+                        moves.push({ r: 0, c: 6 });
+                    }
+                    // Roque maior (lado da dama: C8 / col 2)
+                    if (!movedFlags.blackRookA && board[0][0] === 'r' && board[0][1] === '' && board[0][2] === '' && board[0][3] === '') {
+                        moves.push({ r: 0, c: 2 });
+                    }
+                }
             }
 
             return moves;
