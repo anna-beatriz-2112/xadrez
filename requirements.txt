@@ -1,0 +1,5 @@
+# Este projeto utiliza exclusivamente módulos nativos da biblioteca padrão do Python:
+# - http.server
+# - socketserver
+# - os
+# Nenhuma biblioteca externa via pip é necessária.
