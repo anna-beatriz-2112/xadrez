@@ -130,12 +130,22 @@
             background-color: #facc15 !important;
         }
 
+        .square.in-check {
+            background-color: rgba(239, 68, 68, 0.85) !important;
+            animation: pulseCheck 0.8s infinite alternate ease-in-out;
+        }
+
+        @keyframes pulseCheck {
+            from { box-shadow: inset 0 0 10px #ef4444; }
+            to { box-shadow: inset 0 0 25px #b91c1c; }
+        }
+
         .square.valid-move::after {
             content: '';
             position: absolute;
             width: 16px;
             height: 16px;
-            background-color: rgba(34, 197, 94, 0.8);
+            background-color: rgba(34, 197, 94, 0.85);
             border-radius: 50%;
             pointer-events: none;
         }
@@ -203,7 +213,7 @@
                 <span class="turn-dot" id="turnDot"></span>
                 <span id="turnText">Vez das Brancas</span>
             </div>
-            <div id="gameStatus" style="color: #38bdf8; font-weight: 500;">Partida em andamento</div>
+            <div id="gameStatus" style="color: #38bdf8; font-weight: 600;">Partida em andamento</div>
         </div>
 
         <div class="captured-container">
@@ -284,31 +294,134 @@
                 blackRookA: false,
                 blackRookH: false
             };
-            document.getElementById('gameStatus').textContent = 'Partida em andamento';
+            const statusEl = document.getElementById('gameStatus');
+            statusEl.textContent = 'Partida em andamento';
+            statusEl.style.color = '#38bdf8';
             updateUI();
             renderBoard();
         }
 
-        function playSound() {
+        function playSound(freq = 400, endFreq = 800) {
             try {
                 const ctx = new (window.AudioContext || window.webkitAudioContext)();
                 const osc = ctx.createOscillator();
                 const gain = ctx.createGain();
                 osc.type = 'sine';
-                osc.frequency.setValueAtTime(400, ctx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.08);
+                osc.frequency.setValueAtTime(freq, ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(endFreq, ctx.currentTime + 0.1);
                 gain.gain.setValueAtTime(0.15, ctx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.08);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
                 osc.connect(gain);
                 gain.connect(ctx.destination);
                 osc.start();
-                osc.stop(ctx.currentTime + 0.08);
+                osc.stop(ctx.currentTime + 0.1);
             } catch (e) {}
+        }
+
+        function findKing(color, b = board) {
+            const kingCode = color === 'white' ? 'K' : 'k';
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    if (b[r][c] === kingCode) return { r, c };
+                }
+            }
+            return null;
+        }
+
+        function isSquareAttacked(tr, tc, byColor, b = board) {
+            // 1. Peões
+            const pawnDir = byColor === 'white' ? 1 : -1; // De onde o peão inimigo ataca
+            for (let dc of [-1, 1]) {
+                const pr = tr + pawnDir;
+                const pc = tc + dc;
+                if (pr >= 0 && pr < 8 && pc >= 0 && pc < 8) {
+                    const piece = b[pr][pc];
+                    if (piece && PIECES[piece].color === byColor && PIECES[piece].type === 'pawn') {
+                        return true;
+                    }
+                }
+            }
+
+            // 2. Cavalos
+            const knightJumps = [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]];
+            for (let [dr, dc] of knightJumps) {
+                const nr = tr + dr;
+                const nc = tc + dc;
+                if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+                    const piece = b[nr][nc];
+                    if (piece && PIECES[piece].color === byColor && PIECES[piece].type === 'knight') {
+                        return true;
+                    }
+                }
+            }
+
+            // 3. Rei inimigo
+            const kingDirs = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [-1, 1], [1, -1], [1, 1]];
+            for (let [dr, dc] of kingDirs) {
+                const nr = tr + dr;
+                const nc = tc + dc;
+                if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+                    const piece = b[nr][nc];
+                    if (piece && PIECES[piece].color === byColor && PIECES[piece].type === 'king') {
+                        return true;
+                    }
+                }
+            }
+
+            // 4. Linhas retas (Torre ou Dama)
+            const rookDirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+            for (let [dr, dc] of rookDirs) {
+                let nr = tr + dr;
+                let nc = tc + dc;
+                while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+                    const piece = b[nr][nc];
+                    if (piece) {
+                        if (PIECES[piece].color === byColor && (PIECES[piece].type === 'rook' || PIECES[piece].type === 'queen')) {
+                            return true;
+                        }
+                        break;
+                    }
+                    nr += dr;
+                    nc += dc;
+                }
+            }
+
+            // 5. Diagonais (Bispo ou Dama)
+            const bishopDirs = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
+            for (let [dr, dc] of bishopDirs) {
+                let nr = tr + dr;
+                let nc = tc + dc;
+                while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+                    const piece = b[nr][nc];
+                    if (piece) {
+                        if (PIECES[piece].color === byColor && (PIECES[piece].type === 'bishop' || PIECES[piece].type === 'queen')) {
+                            return true;
+                        }
+                        break;
+                    }
+                    nr += dr;
+                    nc += dc;
+                }
+            }
+
+            return false;
+        }
+
+        function isColorInCheck(color, b = board) {
+            const kingPos = findKing(color, b);
+            if (!kingPos) return false;
+            const enemyColor = color === 'white' ? 'black' : 'white';
+            return isSquareAttacked(kingPos.r, kingPos.c, enemyColor, b);
         }
 
         function renderBoard() {
             const boardEl = document.getElementById('chessboard');
             boardEl.innerHTML = '';
+
+            const whiteKingInCheck = isColorInCheck('white');
+            const blackKingInCheck = isColorInCheck('black');
+            const whiteKingPos = findKing('white');
+            const blackKingPos = findKing('black');
 
             for (let r = 0; r < 8; r++) {
                 for (let c = 0; c < 8; c++) {
@@ -317,6 +430,14 @@
                     square.className = `square ${isLight ? 'light' : 'dark'}`;
                     square.dataset.row = r;
                     square.dataset.col = c;
+
+                    // Destaca rei em xeque
+                    if (whiteKingInCheck && whiteKingPos && whiteKingPos.r === r && whiteKingPos.c === c) {
+                        square.classList.add('in-check');
+                    }
+                    if (blackKingInCheck && blackKingPos && blackKingPos.r === r && blackKingPos.c === c) {
+                        square.classList.add('in-check');
+                    }
 
                     if (selectedSquare && selectedSquare.r === r && selectedSquare.c === c) {
                         square.classList.add('selected');
@@ -364,7 +485,7 @@
             // Se clicou em uma peça da sua vez
             if (piece && piece.color === currentTurn) {
                 selectedSquare = { r, c };
-                validMoves = getValidMoves(r, c);
+                validMoves = getLegalMoves(r, c);
                 renderBoard();
             } else {
                 selectedSquare = null;
@@ -378,15 +499,11 @@
             const targetPiece = board[toR][toC];
             const pieceInfo = PIECES[movingPiece];
 
-            if (targetPiece) {
+            // NUNCA captura o Rei (o jogo termina em xeque-mate antes)
+            if (targetPiece && PIECES[targetPiece].type !== 'king') {
                 const captured = PIECES[targetPiece];
                 if (captured.color === 'white') capturedWhite.push(captured.symbol);
                 else capturedBlack.push(captured.symbol);
-
-                if (captured.type === 'king') {
-                    isGameOver = true;
-                    document.getElementById('gameStatus').textContent = `🏆 Vitória das ${currentTurn === 'white' ? 'Brancas' : 'Pretas'}!`;
-                }
             }
 
             // Movimento de Roque (Castling): Rei move 2 casas lateralmente
@@ -402,7 +519,7 @@
                 }
             }
 
-            // Atualiza flags de movimento (para impedir novo roque)
+            // Atualiza flags de movimento
             if (fromR === 7 && fromC === 4) movedFlags.whiteKing = true;
             if (fromR === 7 && fromC === 0) movedFlags.whiteRookA = true;
             if (fromR === 7 && fromC === 7) movedFlags.whiteRookH = true;
@@ -410,7 +527,7 @@
             if (fromR === 0 && fromC === 0) movedFlags.blackRookA = true;
             if (fromR === 0 && fromC === 7) movedFlags.blackRookH = true;
 
-            // Se uma torre foi capturada em sua posição inicial
+            // Se uma torre foi capturada em sua posição de origem
             if (toR === 7 && toC === 0) movedFlags.whiteRookA = true;
             if (toR === 7 && toC === 7) movedFlags.whiteRookH = true;
             if (toR === 0 && toC === 0) movedFlags.blackRookA = true;
@@ -423,19 +540,91 @@
 
             board[fromR][fromC] = '';
 
-            playSound();
+            // Próximo turno
+            currentTurn = currentTurn === 'white' ? 'black' : 'white';
 
-            if (!isGameOver) {
-                currentTurn = currentTurn === 'white' ? 'black' : 'white';
-            }
+            // Verifica Xeque, Xeque-mate ou Empate
+            checkGameState();
+
             updateUI();
         }
 
-        function getValidMoves(r, c) {
+        function checkGameState() {
+            const inCheck = isColorInCheck(currentTurn);
+            const legalMoves = getAllLegalMoves(currentTurn);
+            const statusEl = document.getElementById('gameStatus');
+
+            if (legalMoves.length === 0) {
+                isGameOver = true;
+                if (inCheck) {
+                    const winner = currentTurn === 'white' ? 'Pretas' : 'Brancas';
+                    statusEl.textContent = `👑 Xeque-mate! Vitória das ${winner}!`;
+                    statusEl.style.color = '#22c55e';
+                    playSound(300, 150);
+                } else {
+                    statusEl.textContent = `🤝 Empate por afogamento (Stalemate)!`;
+                    statusEl.style.color = '#fbbf24';
+                }
+            } else if (inCheck) {
+                statusEl.textContent = `⚠️ Xeque nas ${currentTurn === 'white' ? 'Brancas' : 'Pretas'}!`;
+                statusEl.style.color = '#ef4444';
+                playSound(600, 250);
+            } else {
+                statusEl.textContent = 'Partida em andamento';
+                statusEl.style.color = '#38bdf8';
+                playSound(400, 800);
+            }
+        }
+
+        function getAllLegalMoves(color) {
+            const allMoves = [];
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    const piece = board[r][c];
+                    if (piece && PIECES[piece].color === color) {
+                        const moves = getLegalMoves(r, c);
+                        allMoves.push(...moves);
+                    }
+                }
+            }
+            return allMoves;
+        }
+
+        function getLegalMoves(r, c) {
+            const pieceCode = board[r][c];
+            if (!pieceCode) return [];
+            const piece = PIECES[pieceCode];
+            const candidateMoves = getPseudoMoves(r, c);
+
+            // Filtra movimentos que deixariam o próprio Rei em xeque
+            return candidateMoves.filter(m => {
+                const nextBoard = board.map(row => [...row]);
+
+                // Simulação do roque
+                if (piece.type === 'king' && Math.abs(m.c - c) === 2) {
+                    if (m.c === 6) {
+                        nextBoard[r][5] = nextBoard[r][7];
+                        nextBoard[r][7] = '';
+                    } else if (m.c === 2) {
+                        nextBoard[r][3] = nextBoard[r][0];
+                        nextBoard[r][0] = '';
+                    }
+                }
+
+                nextBoard[m.r][m.c] = nextBoard[r][c];
+                nextBoard[r][c] = '';
+
+                // O movimento é ilegal se o próprio Rei ficar sob ataque
+                return !isColorInCheck(piece.color, nextBoard);
+            });
+        }
+
+        function getPseudoMoves(r, c) {
             const pieceCode = board[r][c];
             if (!pieceCode) return [];
             const piece = PIECES[pieceCode];
             const moves = [];
+            const enemyColor = piece.color === 'white' ? 'black' : 'white';
 
             function addIfValid(nr, nc) {
                 if (nr < 0 || nr > 7 || nc < 0 || nc > 7) return false;
@@ -444,7 +633,8 @@
                     moves.push({ r: nr, c: nc });
                     return true;
                 }
-                if (PIECES[targetCode].color !== piece.color) {
+                // Não pode capturar o próprio time nem o rei adversário diretamente
+                if (PIECES[targetCode].color !== piece.color && PIECES[targetCode].type !== 'king') {
                     moves.push({ r: nr, c: nc });
                 }
                 return false;
@@ -477,7 +667,7 @@
                     const nc = c + dc;
                     if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
                         const target = board[nr][nc];
-                        if (target && PIECES[target].color !== piece.color) {
+                        if (target && PIECES[target].color !== piece.color && PIECES[target].type !== 'king') {
                             moves.push({ r: nr, c: nc });
                         }
                     }
@@ -495,24 +685,38 @@
                 const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [-1, 1], [1, -1], [1, 1]];
                 dirs.forEach(([dr, dc]) => addIfValid(r + dr, c + dc));
 
-                // Roque (Castling)
-                if (piece.color === 'white' && !movedFlags.whiteKing && r === 7 && c === 4) {
-                    // Roque menor (lado do rei: G1 / col 6)
-                    if (!movedFlags.whiteRookH && board[7][7] === 'R' && board[7][5] === '' && board[7][6] === '') {
-                        moves.push({ r: 7, c: 6 });
-                    }
-                    // Roque maior (lado da dama: C1 / col 2)
-                    if (!movedFlags.whiteRookA && board[7][0] === 'R' && board[7][1] === '' && board[7][2] === '' && board[7][3] === '') {
-                        moves.push({ r: 7, c: 2 });
-                    }
-                } else if (piece.color === 'black' && !movedFlags.blackKing && r === 0 && c === 4) {
-                    // Roque menor (lado do rei: G8 / col 6)
-                    if (!movedFlags.blackRookH && board[0][7] === 'r' && board[0][5] === '' && board[0][6] === '') {
-                        moves.push({ r: 0, c: 6 });
-                    }
-                    // Roque maior (lado da dama: C8 / col 2)
-                    if (!movedFlags.blackRookA && board[0][0] === 'r' && board[0][1] === '' && board[0][2] === '' && board[0][3] === '') {
-                        moves.push({ r: 0, c: 2 });
+                // Regras oficiais do Roque:
+                // 1. O Rei não pode estar em xeque
+                // 2. As casas pelas quais o Rei passa ou aterrissa não podem estar sob ataque
+                const kingCurrentlyInCheck = isColorInCheck(piece.color);
+
+                if (!kingCurrentlyInCheck) {
+                    if (piece.color === 'white' && !movedFlags.whiteKing && r === 7 && c === 4) {
+                        // Roque menor (G1)
+                        if (!movedFlags.whiteRookH && board[7][7] === 'R' && board[7][5] === '' && board[7][6] === '') {
+                            if (!isSquareAttacked(7, 5, enemyColor) && !isSquareAttacked(7, 6, enemyColor)) {
+                                moves.push({ r: 7, c: 6 });
+                            }
+                        }
+                        // Roque maior (C1)
+                        if (!movedFlags.whiteRookA && board[7][0] === 'R' && board[7][1] === '' && board[7][2] === '' && board[7][3] === '') {
+                            if (!isSquareAttacked(7, 3, enemyColor) && !isSquareAttacked(7, 2, enemyColor)) {
+                                moves.push({ r: 7, c: 2 });
+                            }
+                        }
+                    } else if (piece.color === 'black' && !movedFlags.blackKing && r === 0 && c === 4) {
+                        // Roque menor (G8)
+                        if (!movedFlags.blackRookH && board[0][7] === 'r' && board[0][5] === '' && board[0][6] === '') {
+                            if (!isSquareAttacked(0, 5, enemyColor) && !isSquareAttacked(0, 6, enemyColor)) {
+                                moves.push({ r: 0, c: 6 });
+                            }
+                        }
+                        // Roque maior (C8)
+                        if (!movedFlags.blackRookA && board[0][0] === 'r' && board[0][1] === '' && board[0][2] === '' && board[0][3] === '') {
+                            if (!isSquareAttacked(0, 3, enemyColor) && !isSquareAttacked(0, 2, enemyColor)) {
+                                moves.push({ r: 0, c: 2 });
+                            }
+                        }
                     }
                 }
             }
